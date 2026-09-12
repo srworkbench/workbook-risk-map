@@ -177,10 +177,14 @@ def inspect_workbook(data):
         workbook.close(); cached.close()
 
 
-def build(path, output):
+def build(path, output, source=None, target=None):
     from report import render
     if Path(path).suffix.lower() != '.xlsx': raise ValueError('Use a macro-free .xlsx workbook')
+    if target is not None and source is None: raise ValueError('--to requires --from-cell')
     plan = inspect_workbook(Path(path).read_bytes())
+    if source is not None:
+        from trace import selection
+        plan['selection'] = selection(plan,source,target)
     output = Path(output); output.mkdir(mode=0o700)
     try:
         (output/'audit.json').write_text(json.dumps(plan, indent=2)+'\n', encoding='utf-8')
@@ -195,7 +199,9 @@ def build(path, output):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('workbook', type=Path); parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--from-cell', help='Trace a single cell, e.g. Rates!B2')
+    parser.add_argument('--to', help='Show one shortest parsed path to this cell')
     args = parser.parse_args()
-    try: result = build(args.workbook, args.out)
+    try: result = build(args.workbook, args.out, args.from_cell, args.to)
     except (ValueError, OSError, zipfile.BadZipFile) as exc: parser.exit(2, f'Audit failed: {exc}\n')
     print(json.dumps(result['coverage']))

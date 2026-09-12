@@ -12,6 +12,27 @@ python demo.py --out out-demo
 
 `out-demo/report/impact.png` summarizes the issue seed with the most reachable formulas. `audit.json` contains every detected issue, cycle group, parsed dependency and impact set. The generated workbook is an entirely invented regression fixture. No workplace files or customer data are included.
 
+## Trace a selected input to a result
+
+You can now start from any qualified cell, even when it has no error. Select a source and optional destination:
+
+```sh
+python demo_trace.py --out out-trace-demo
+python audit.py out-trace-demo/model.xlsx --out out-selected --from-cell 'Inputs!B2' --to 'Checks!A1'
+```
+
+![Computed shortest dependency path through a hidden sheet](docs/path.png)
+
+This demonstration follows an ordinary input through `Model!B2` (hidden), `Summary!B2`, and `Checks!A1` (very hidden). There are two equally short routes through the model; the tool chooses one deterministically. The full reachable set still includes both model cells.
+
+With `--from-cell` alone, `impact.png` groups the selected cell's reachable formulas by sheet. Add `--to` to produce `path.png` and a `selection` object in `audit.json` containing one shortest path, its reference-step count, and the full reachable set. Quote the whole selector at the shell; sheet names containing spaces or apostrophes use Excel quoting, such as `"'O''Brien'!B2"`.
+
+The path has four explicit outcomes: `found`, `same_cell` (zero steps), `no_parsed_path`, or `not_requested`. A valid cell selector can identify an empty or unreferenced cell. An empty reach set means no downstream formulas were found in the parsed graph; it is not proof of independence.
+
+The second report in `out-trace-demo/unresolved/` demonstrates that boundary: `Notes!A1` uses `INDIRECT` to refer to the input, but the static parser cannot resolve that edge. The report exposes the unresolved item and does not invent a path. Paths longer than 12 cells are shortened only in the image, with the omitted count shown; JSON retains every cell. Each visible formula can be checked against the preceding step.
+
+Breadth-first search finds the path with the fewest parsed reference edges. Sorted neighbors make tied choices stable, and a visited set keeps cycles from repeating. This is a structural explanation, not a calculated influence score or proof of runtime execution.
+
 ## What the report means
 
 This is **static dependency analysis**, not an Excel calculation engine. A parsed reference creates an edge from the referenced cell to the formula that uses it. Following those edges shows potential downstream reach. An `IF` expression contributes references from both branches, so reach is not proof that a branch executed or a result is wrong.
@@ -23,6 +44,8 @@ Named ranges, structured tables, external workbooks, 3D references, whole rows/c
 ## Why another workbook auditor?
 
 Excel's [Spreadsheet Inquire](https://support.microsoft.com/en-us/excel/analyze-a-workbook-with-spreadsheet-inquire) offers much broader workbook inspection. [FormulaSpy](https://www.formuladesk.com/formulaspy/) provides interactive formula trees, evaluation and precedent drilldown inside Excel.
+
+Excel also offers [Trace Dependents and Trace Precedents](https://support.microsoft.com/en-us/excel/display-the-relationships-between-formulas-and-cells) and Inquire cell relationship diagrams. Selected-cell tracing is established functionality.
 
 Workbook Risk Map has a narrower purpose: create a portable static cross-sheet impact report from an XLSX file without an Excel installation. You can inspect the graph as JSON, reproduce the report and see unsupported paths explicitly. It does not replace those tools' formula evaluation or interactive editing.
 
